@@ -139,24 +139,23 @@ def is_float(value):
         return False
 
 
-# Função para dividir mensagens longas
+# Função para dividir mensagens longas corretamente no Discord
 async def send_long_message(ctx, message_content):
-    max_len = 4000
+    max_len = 2000  # Corrigido: limite real do Discord
     if len(message_content) <= max_len:
         await ctx.send(message_content)
     else:
-        # Tenta dividir por seções de Markdown (cabeçalhos, linhas horizontais)
         parts = re.split(r'(\n---|\n## |\n### |\n#### )', message_content)
         current_part = ""
         for i, part in enumerate(parts):
             if len(current_part) + len(part) < max_len:
                 current_part += part
             else:
-                if current_part:
-                    await ctx.send(current_part)
+                if current_part.strip():
+                    await ctx.send(current_part.strip())
                 current_part = part
-        if current_part:
-            await ctx.send(current_part)
+        if current_part.strip():
+            await ctx.send(current_part.strip())
 
 
 # --- Eventos do Bot Discord ---

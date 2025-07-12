@@ -4,3 +4,4 @@ aiohttp
 pandas
 matplotlib
 alpha_vantage
+python-dotenv

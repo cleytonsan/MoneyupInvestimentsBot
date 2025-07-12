@@ -321,9 +321,6 @@ Você é um consultor financeiro chamado MoneyupInvestiments, especializado em p
         await send_long_message(ctx, analysis_text)
     except Exception as e:
         await ctx.send(f"Erro ao gerar a análise: {e}")
-        finally:
-        if user_id in user_session_data:
-            del user_session_data[user_id]
 
 @bot.command(name='ajuda',
              help='Mostra os comandos disponíveis do MoneyupInvestiments.')

@@ -1,7 +1,7 @@
 discord.py
-google-generativeai
+python-dotenv
 aiohttp
 pandas
 matplotlib
 alpha_vantage
-python-dotenv
+google-generativeai

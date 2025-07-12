@@ -201,7 +201,126 @@ async def on_message(message):
 
 
 # --- Comandos do Bot ---
+@bot.command(name='analisar', help='Inicia uma análise de mercado e sugestões de investimento.')
+async def analyze_investment(ctx):
+    user_id = ctx.author.id
+    user_session_data[user_id] = {}
 
+    await ctx.send("Olá! Sou o MoneyupInvestiments. Vamos iniciar sua análise de investimento para este mês.")
+
+    # 🚀 Novo passo: perguntar o perfil de investidor
+    await ctx.send("Qual é o seu perfil de investidor? (Conservador, Moderado ou Agressivo)")
+    try:
+        profile_msg = await bot.wait_for(
+            'message',
+            check=lambda m: m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['conservador', 'moderado', 'agressivo'],
+            timeout=60.0
+        )
+        profile = profile_msg.content.lower()
+        user_session_data[user_id]['profile'] = profile
+        await ctx.send(f"Perfil '{profile.title()}' definido. A análise será ajustada com base nisso.")
+    except asyncio.TimeoutError:
+        await ctx.send("Tempo esgotado. Considerarei o perfil 'Moderado' como padrão.")
+        user_session_data[user_id]['profile'] = 'moderado'
+
+    await ctx.send("Qual o **valor total que você pretende investir este mês**? (Somente o número, ex: `1000`)")
+    try:
+        investment_value_msg = await bot.wait_for(
+            'message',
+            check=lambda m: m.author == ctx.author and m.channel == ctx.channel and is_float(m.content),
+            timeout=60.0
+        )
+        user_session_data[user_id]['investment_value'] = float(investment_value_msg.content)
+        await ctx.send(f"Ok, você pretende investir R$ {user_session_data[user_id]['investment_value']:,.2f}.")
+    except asyncio.TimeoutError:
+        await ctx.send("Tempo esgotado. Por favor, tente `!analisar` novamente.")
+        del user_session_data[user_id]
+        return
+
+    # Busca Selic
+    current_selic = await get_selic_rate()
+    if not current_selic:
+        await ctx.send("Não consegui buscar a **taxa Selic**. Por favor, informe (ex: `10.75`):")
+        try:
+            selic_msg = await bot.wait_for(
+                'message',
+                check=lambda m: m.author == ctx.author and m.channel == ctx.channel and is_float(m.content),
+                timeout=60.0
+            )
+            user_session_data[user_id]['selic'] = float(selic_msg.content)
+        except:
+            user_session_data[user_id]['selic'] = None
+    else:
+        user_session_data[user_id]['selic'] = current_selic
+        await ctx.send(f"A taxa Selic atual (via API) é: **{current_selic}%**.")
+
+    # Busca IPCA
+    current_ipca = await get_ipca_rate()
+    if not current_ipca:
+        await ctx.send("Não consegui buscar o **IPCA**. Por favor, informe (ex: `0.5`):")
+        try:
+            ipca_msg = await bot.wait_for(
+                'message',
+                check=lambda m: m.author == ctx.author and m.channel == ctx.channel and is_float(m.content),
+                timeout=60.0
+            )
+            user_session_data[user_id]['ipca'] = float(ipca_msg.content)
+        except:
+            user_session_data[user_id]['ipca'] = None
+    else:
+        user_session_data[user_id]['ipca'] = current_ipca
+        await ctx.send(f"A taxa IPCA atual (via API) é: **{current_ipca}%**.")
+
+    # Pergunta percepção do mercado
+    await ctx.send("Como você vê o **mercado de ações este mês**? (Ex: 'Mercado otimista', 'Mercado estável', 'Mercado em baixa')")
+    try:
+        market_msg = await bot.wait_for(
+            'message',
+            check=lambda m: m.author == ctx.author and m.channel == ctx.channel,
+            timeout=60.0
+        )
+        user_session_data[user_id]['market_perception'] = market_msg.content
+    except:
+        user_session_data[user_id]['market_perception'] = "Não informado."
+
+    # 📊 Perfis descritivos
+    profile_description = {
+        'conservador': 'baixa tolerância a risco, foco em segurança e liquidez, prioriza renda fixa e proteção do capital.',
+        'moderado': 'equilíbrio entre segurança e rentabilidade, aceita riscos controlados e preza por diversificação.',
+        'agressivo': 'alta tolerância a risco, busca rentabilidade elevada com exposição a renda variável e ativos voláteis.'
+    }
+
+    investment_value = user_session_data[user_id]['investment_value']
+    selic_info = f"{user_session_data[user_id]['selic']}%" if user_session_data[user_id]['selic'] else "Não informada"
+    ipca_info = f"{user_session_data[user_id]['ipca']}%" if user_session_data[user_id]['ipca'] else "Não informada"
+    perception = user_session_data[user_id]['market_perception']
+    profile_key = user_session_data[user_id]['profile']
+
+    # 🧠 Prompt para Gemini (adaptado)
+    prompt = f"""
+Você é um consultor financeiro chamado MoneyupInvestiments, especializado em perfis de risco. Um usuário respondeu às perguntas e você deve gerar uma análise personalizada.
+
+📌 **Informações:**
+- Perfil de investidor: {profile_key.title()} — {profile_description[profile_key]}
+- Valor a investir: R$ {investment_value:,.2f}
+- Taxa Selic: {selic_info}
+- IPCA: {ipca_info}
+- Percepção do mercado: {perception}
+
+📈 Gere:
+1. Um resumo do cenário atual.
+2. Uma sugestão de alocação de carteira, com percentuais e ativos por tipo (ex: Tesouro, CDB, ações, FIIs, cripto).
+3. Justificativas para cada alocação com base no perfil.
+"""
+
+    await ctx.send("Processando sua análise... Isso pode levar alguns segundos.")
+
+    try:
+        response = await asyncio.to_thread(model.generate_content, prompt)
+        analysis_text = response.text
+        await send_long_message(ctx, analysis_text)
+    except Exception as e:
+        await ctx.send(f"Erro ao gerar a análise: {e}")
 
 @bot.command(name='ajuda',
              help='Mostra os comandos disponíveis do MoneyupInvestiments.')

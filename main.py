@@ -470,4 +470,136 @@ async def analyze_investment(ctx):
 
     **Sua Análise e Sugestões Devem Conter:**
     1.  **Análise de Mercado e Cenário Atual**:
-        * Explique de forma **concisa** o que está acontecendo no Brasil e no mundo (inflação, juros, crescimento, eventos polític)
+        * Explique de forma **concisa** o que está acontecendo no Brasil e no mundo (inflação, juros, crescimento, eventos políticos/econômicos relevantes).
+        * Descreva de forma **concisa** o que está em alta ou em baixa em termos de setores ou tipos de ativos, relacionando com o cenário atual.
+        * Crie um breve "histórico" e "tendência" para as principais classes de ativos, mesmo que fictícios, para embasar suas sugestões.
+
+    2.  **Sugestão de Alocação de Carteira para R$ {investment_value:,.2f}**:
+        * Para cada tipo de investimento, sugira um **percentual do valor total** a ser alocado.
+        * Para cada percentual, **sugira um NOME REALISTA DE ATIVO** (ou um exemplo fictício muito convincente), com foco em tickers de bolsa ou nomes de fundos conhecidos (ex: "Tesouro Selic 2029", "CDB Banco Seguro 115% CDI", "FII HGLG11", "Ação VALE3 (ou PETR4, ITUB4)", "Fundo de Ações XPTO Ações", "Bitcoin (via ETF como BITH11)").
+        * **Justifique a escolha do ativo e do percentual** com base no perfil moderado, no cenário e no valor disponível.
+        * As porcentagens devem somar 100%.
+
+    **Formato da Resposta (Seja o mais conciso possível, mirando em 2000-3000 caracteres, mas mantendo a qualidade e nomes de ativos realistas):**
+
+    ```
+    ## Análise de Mercado e Cenário Atual
+
+    **Panorama Econômico:** [Breve análise do cenário nacional e global, inflação, juros, etc. - MÁX 3 FRASES]
+
+    **O que está em Alta/Baixa:** [Destaque de setores ou classes de ativos, justificando com o cenário. - MÁX 3 FRASES]
+
+    **Histórico e Tendência:**
+    - **Renda Fixa:** [Breve histórico/tendência, ex: "Com Selic alta, renda fixa conservadora está atraente..." - MÁX 2 FRASES]
+    - **Ações:** [Brief history/trend, e.g., "Mercado volátil, mas empresas sólidas mostram resiliência..." - MÁX 2 FRASES]
+    - **Fundos Imobiliários:** [Breve histórico/tendência, ex: "Retorno de dividendos estáveis, mas cautela com juros altos..." - MÁX 2 FRASES]
+    - **Criptomoedas:** [Breve histórico/tendência, ex: "Extrema volatilidade, apenas para perfil agressivo ou parcela mínima..." - MÁX 2 FRASES]
+
+    ---
+
+    ## Sua Carteira MoneyupInvestiments para R$ {investment_value:,.2f} (Perfil Moderado)
+
+    Aqui está uma sugestão de alocação de acordo com a análise e seu perfil:
+
+    - **Renda Fixa Segura (Tesouro Direto, CDBs, LCIs/LCAs)**: [X]%
+      * **Sugestão de Ativo**: [Nome realista, ex: "Tesouro IPCA+ 2035", "CDB Banco Solidez 115% CDI (liquidez diária)"]
+      * **Valor Alocado**: R$ [Valor correspondente ao percentual]
+      * **Justificativa**: [Por que essa alocação e esse ativo fazem sentido para um perfil moderado. MÁX 2 FRASES]
+
+    - **Fundos Imobiliários (FIIs)**: [Y]%
+      * **Sugestão de Ativo**: [Nome realista, ex: "FII HGLG11 (Logística)", "FII MXRF11 (Papel)"]
+      * **Valor Alocado**: R$ [Valor correspondente ao percentual]
+      * **Justificativa**: [Por que essa alocação e esse ativo fazem sentido. MÁX 2 FRASES]
+
+    - **Ações (via Fundo de Ações ou poucas empresas sólidas)**: [Z]%
+      * **Sugestão de Ativo**: [Nome realista, ex: "Fundo de Ações Ibovespa Ativo", "Ação ITUB4 (Itaú Unibanco)", "Ação PETR4 (Petrobras)"]
+      * **Valor Alocado**: R$ [Valor correspondente ao percentual]
+      * **Justificativa**: [Por que essa alocação e esse ativo fazem sentido. MÁX 2 FRASES]
+
+    - **Fundos Multimercado**: [W]% (Opcional, se a análise justificar)
+      * **Sugestão de Ativo**: [Nome realista, ex: "Fundo Multimercado Dinâmico XP"]
+      * **Valor Alocado**: R$ [Valor correspondente ao percentual]
+      * **Justificativa**: [Por que essa alocação e esse ativo fazem sentido. MÁX 2 FRASES]
+
+    - **Criptomoedas**: [P]% (Apenas um percentual MUITO pequeno, se o perfil moderado aceitar um risco controlado)
+      * **Sugestão de Ativo**: [Nome realista, ex: "ETF BITH11 (Bitcoin)"]
+      * **Valor Alocado**: R$ [Valor correspondente ao percentual]
+      * **Justificativa**: [Por que essa alocação e esse ativo fazem sentido (enfatizando o alto risco). MÁX 2 FRASES]
+
+    ---
+
+    **Observação Importante:** As sugestões de ativos são **exemplos educativos e simulados**, baseados em uma análise gerada por inteligência artificial com as informações disponíveis. O mercado financeiro é dinâmico e o desempenho passado não garante o futuro. Esta não é uma recomendação de investimento profissional. Consulte sempre um profissional financeiro certificado para decisões reais de investimento.
+    """
+
+    await ctx.send(
+        "Processando sua análise detalhada de mercado e construindo sua carteira sugerida... Isso pode levar um momento."
+    )
+    try:
+        response = model.generate_content(prompt)
+        analysis_text = response.text
+
+        # CHAMA A FUNÇÃO PARA ENVIAR A MENSAGEM DIVIDIDA
+        await send_long_message(ctx, analysis_text)
+
+        allocation_pattern = r"- \*\*(.*?)\*\*:\s*\[(\d+)\]%"
+        matches = re.findall(allocation_pattern, analysis_text)
+
+        chart_allocations = {}
+        for asset_type, percentage_str in matches:
+            try:
+                percentage = float(percentage_str)
+                clean_asset_type = re.sub(r'\s*\(.*?\)', '',
+                                          asset_type).strip()
+                chart_allocations[clean_asset_type] = percentage
+            except ValueError:
+                continue
+
+        if chart_allocations and sum(chart_allocations.values()) > 0:
+            await ctx.send(
+                "Aqui está um gráfico de pizza ilustrativo da alocação sugerida:"
+            )
+            chart_file = await generate_pie_chart(
+                chart_allocations, title="Sugestão de Alocação de Carteira")
+            if chart_file:
+                await ctx.send(file=chart_file)
+            else:
+                await ctx.send("Não foi possível gerar o gráfico de alocação.")
+        else:
+            await ctx.send(
+                "Não foi possível extrair dados de alocação para gerar o gráfico."
+            )
+
+        await ctx.send(
+            "\n\nEspero que esta análise detalhada e as sugestões ajudem você a dar seus próximos passos. "
+            "Lembre-se de que o mercado muda e é fundamental continuar estudando e, para decisões reais, "
+            "sempre considere buscar o conselho de um profissional financeiro certificado. "
+            "Precisa de mais alguma análise ou explicação? "
+            "Para mais detalhes sobre cada tipo de investimento, use `!conceito [tipo de investimento]`."
+        )
+
+    except Exception as e:
+        await ctx.send(
+            f"Desculpe, não consegui gerar a análise no momento. Erro: {e}")
+        print(f"Erro ao gerar conteúdo Gemini: {e}")
+    finally:
+        if user_id in user_session_data:
+            del user_session_data[user_id]
+
+
+# --- Executar o Bot ---
+if __name__ == "__main__":
+    if not DISCORD_BOT_TOKEN:
+        print(
+            "Erro: DISCORD_BOT_TOKEN não encontrado. Certifique-se de adicioná-lo nas Secrets do Replit."
+        )
+    elif not GEMINI_API_KEY:
+        print(
+            "Erro: GEMINI_API_KEY não encontrado. Certifique-se de adicioná-lo nas Secrets do Replit."
+        )
+    elif not ALPHA_VANTAGE_API_KEY:
+        print(
+            "Erro: ALPHA_VANTAGE_API_KEY não encontrado. Certifique-se de adicioná-lo nas Secrets do Replit."
+        )
+    else:
+        bot.run(DISCORD_BOT_TOKEN)
+        

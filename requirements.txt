@@ -1,0 +1,6 @@
+discord.py
+google-generativeai
+aiohttp
+pandas
+matplotlib
+alpha_vantage

@@ -1,3 +1,5 @@
+from dotenv import load_dotenv
+load_dotenv()
 import discord
 from discord.ext import commands
 import google.generativeai as genai
@@ -468,4 +470,4 @@ async def analyze_investment(ctx):
 
     **Sua Análise e Sugestões Devem Conter:**
     1.  **Análise de Mercado e Cenário Atual**:
-        * Explique de forma **concisa** o que está acontecendo no Brasil e no mundo (inflação, juros, crescimento, eventos polític
+        * Explique de forma **concisa** o que está acontecendo no Brasil e no mundo (inflação, juros, crescimento, eventos polític)

@@ -346,7 +346,7 @@ async def help_command(ctx):
     embed.add_field(
         name="Interações Naturais (sem `!`):",
         value=
-        "Você também pode tentar dizer:\n- `Olá` ou `Oi`\n- `Qual o investimento de hoje`\n- `O que temos para investir`\nPara uma conversa inicial e dicas.",
+        "Você também pode tentar dizer:\n- `Olá` ou `Oi`\n- `Qual o investimento de hoje`\n- `analisar`\n- `ajuda`\n- `O que temos para investir`\nPara uma conversa inicial e dicas.",
         inline=False)
     embed.set_footer(
         text=

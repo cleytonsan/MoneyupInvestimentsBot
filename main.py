@@ -271,7 +271,17 @@ async def analyze_investment(ctx):
         user_session_data[user_id]['ipca'] = current_ipca
         await ctx.send(f"A taxa IPCA atual (via API) é: **{current_ipca}%**.")
 
- 
+    # Pergunta percepção do mercado
+    await ctx.send("Como você vê o **mercado de ações este mês**? (Ex: 'Mercado otimista', 'Mercado estável', 'Mercado em baixa')")
+    try:
+        market_msg = await bot.wait_for(
+            'message',
+            check=lambda m: m.author == ctx.author and m.channel == ctx.channel,
+            timeout=60.0
+        )
+        user_session_data[user_id]['market_perception'] = market_msg.content
+    except:
+        user_session_data[user_id]['market_perception'] = "Não informado."
 
     # 📊 Perfis descritivos
     profile_description = {

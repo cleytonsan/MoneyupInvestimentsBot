@@ -1,5 +1,3 @@
-from dotenv import load_dotenv
-load_dotenv()
 import discord
 from discord.ext import commands
 import google.generativeai as genai
@@ -11,6 +9,7 @@ import matplotlib.pyplot as plt
 import io
 import re
 from alpha_vantage.timeseries import TimeSeries
+from datetime import datetime # Importação adicionada para pegar o mês atual
 
 # --- Configurações Iniciais ---
 
@@ -29,8 +28,8 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 user_session_data = {}
 
-
 # --- Funções Auxiliares (APIs e Geração de Gráficos) ---
+
 async def get_selic_rate():
     try:
         url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.1178/dados/ultimos/1?formato=json"
@@ -44,7 +43,6 @@ async def get_selic_rate():
     except Exception as e:
         print(f"Erro ao buscar Selic: {e}")
         return None
-
 
 async def get_ipca_rate():
     try:
@@ -60,7 +58,6 @@ async def get_ipca_rate():
         print(f"Erro ao buscar IPCA: {e}")
         return None
 
-
 async def get_stock_data(symbol):
     if not ALPHA_VANTAGE_API_KEY:
         print("ALPHA_VANTAGE_API_KEY não configurada.")
@@ -68,9 +65,7 @@ async def get_stock_data(symbol):
 
     try:
         ts = TimeSeries(key=ALPHA_VANTAGE_API_KEY, output_format='pandas')
-        data, meta_data = await asyncio.to_thread(ts.get_daily,
-                                                  symbol=symbol,
-                                                  outputsize='compact')
+        data, meta_data = await asyncio.to_thread(ts.get_daily, symbol=symbol, outputsize='compact')
         data.columns = [col.split('. ')[1] for col in data.columns]
         data.index = pd.to_datetime(data.index)
         data = data.sort_index()
@@ -79,10 +74,7 @@ async def get_stock_data(symbol):
         print(f"Erro ao buscar dados da ação {symbol} na Alpha Vantage: {e}")
         return None
 
-
-async def generate_line_chart(data_series,
-                              title="Gráfico de Preço",
-                              ylabel="Preço (R$)"):
+async def generate_line_chart(data_series, title="Gráfico de Preço", ylabel="Preço (R$)"):
     if data_series is None or data_series.empty:
         return None
 
@@ -103,9 +95,7 @@ async def generate_line_chart(data_series,
     plt.close()
     return discord.File(buf, filename="price_chart.png")
 
-
-async def generate_pie_chart(allocations,
-                             title="Sugestão de Alocação da Carteira"):
+async def generate_pie_chart(allocations, title="Sugestão de Alocação da Carteira"):
     if not allocations:
         return None
 
@@ -115,12 +105,7 @@ async def generate_pie_chart(allocations,
 
     plt.style.use('dark_background')
     plt.figure(figsize=(10, 8))
-    plt.pie(sizes,
-            labels=labels,
-            colors=colors,
-            autopct='',
-            startangle=90,
-            wedgeprops={'edgecolor': 'white'})
+    plt.pie(sizes, labels=labels, colors=colors, autopct='', startangle=90, wedgeprops={'edgecolor': 'white'})
     plt.axis('equal')
     plt.title(title, color='white')
 
@@ -130,7 +115,6 @@ async def generate_pie_chart(allocations,
     plt.close()
     return discord.File(buf, filename="allocation_chart.png")
 
-
 def is_float(value):
     try:
         float(value)
@@ -138,14 +122,16 @@ def is_float(value):
     except ValueError:
         return False
 
-
-# Função para dividir mensagens longas corretamente no Discord
+# Função para dividir mensagens longas (ajustada para 2000 e melhor tratamento de partes)
 async def send_long_message(ctx, message_content):
-    max_len = 2000  # Corrigido: limite real do Discord
+    max_len = 1950  # Margem de segurança para o limite de 2000 caracteres
     if len(message_content) <= max_len:
         await ctx.send(message_content)
     else:
-        parts = re.split(r'(\n---|\n## |\n### |\n#### )', message_content)
+        # Tenta dividir por seções de Markdown (cabeçalhos, linhas horizontais) ou quebras de linha duplas
+        # priorizando quebras lógicas
+        parts = re.split(r'(\n---\n|\n## [^\n]*\n|\n### [^\n]*\n|\n#### [^\n]*\n|\n\n)', message_content)
+        
         current_part = ""
         for i, part in enumerate(parts):
             if len(current_part) + len(part) < max_len:
@@ -154,29 +140,23 @@ async def send_long_message(ctx, message_content):
                 if current_part.strip():
                     await ctx.send(current_part.strip())
                 current_part = part
-        if current_part.strip():
+        if current_part.strip(): # Envia a última parte se houver
             await ctx.send(current_part.strip())
 
-
 # --- Eventos do Bot Discord ---
-
 
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} está online!')
     print('---')
 
-
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
-        await ctx.send(
-            "Comando não encontrado. Use `!ajuda` para ver os comandos disponíveis."
-        )
+        await ctx.send("Comando não encontrado. Use `!ajuda` para ver os comandos disponíveis.")
     else:
         print(f"Erro no comando: {error}")
         await ctx.send(f"Ocorreu um erro ao executar o comando: `{error}`")
-
 
 @bot.event
 async def on_message(message):
@@ -187,20 +167,88 @@ async def on_message(message):
 
     if "olá" in msg_content or "oi" in msg_content or "ola" in msg_content:
         if not msg_content.startswith(bot.command_prefix):
-            await message.channel.send(
-                f"Olá, {message.author.mention}! Sou o MoneyupInvestiments. Como posso ajudar você hoje com seus investimentos?"
-            )
+            await message.channel.send(f"Olá, {message.author.mention}! Sou o MoneyupInvestiments. Como posso ajudar você hoje com seus investimentos?")
 
     if "investimento de hoje" in msg_content or "o que temos para investir" in msg_content:
         if not msg_content.startswith(bot.command_prefix):
-            await message.channel.send(
-                f"Para uma análise completa e sugestões de investimento, por favor, use o comando `!analisar`. Eu farei algumas perguntas para personalizar a análise."
-            )
+            await message.channel.send(f"Para uma análise completa e sugestões de investimento, por favor, use o comando `!analisar`. Eu farei algumas perguntas para personalizar a análise.")
 
     await bot.process_commands(message)
 
-
 # --- Comandos do Bot ---
+
+@bot.command(name='ajuda', help='Mostra os comandos disponíveis do MoneyupInvestiments.')
+async def help_command(ctx):
+    embed = discord.Embed(
+        title="Bem-vindo ao MoneyupInvestiments! 💰",
+        description="Sou seu instrutor pessoal para te ajudar a entender e navegar no mundo dos investimentos. Aqui estão os comandos que você pode usar:",
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="`!analisar`", value="Peça uma análise de mercado e sugestões de investimento específicas.", inline=False)
+    embed.add_field(name="`!conceito [termo]`", value="Obtenha uma explicação detalhada sobre Tesouro Direto, CDB, LCI, LCA, Ações, Fundos de Investimento ou Criptomoedas.", inline=False)
+    embed.add_field(name="`!grafico_acao [simbolo]`", value="Gera um gráfico histórico de preço para um símbolo de ação (ex: `!grafico_acao IBM`).", inline=False)
+    embed.add_field(name="`!limpar_dados`", value="Limpa os dados da sua sessão atual (útil se quiser recomeçar uma análise).", inline=False)
+    embed.add_field(name="`!ajuda`", value="Mostra esta mensagem de ajuda.", inline=False)
+    embed.add_field(name="Interações Naturais (sem `!`):", value="Você também pode tentar dizer:\n- `Olá` ou `Oi`\n- `Qual o investimento de hoje`\n- `O que temos para investir`\nPara uma conversa inicial e dicas.", inline=False)
+    embed.set_footer(text="Lembre-se: As sugestões são baseadas nas informações disponíveis e em modelos de IA. As decisões finais são suas!")
+    await ctx.send(embed=embed)
+
+@bot.command(name='limpar_dados', help='Limpa os dados da sua sessão atual.')
+async def clear_data(ctx):
+    user_id = ctx.author.id
+    if user_id in user_session_data:
+        del user_session_data[user_id]
+        await ctx.send("Seus dados de sessão foram limpos. Você pode iniciar uma nova análise com `!analisar`.")
+    else:
+        await ctx.send("Não há dados de sessão para limpar.")
+
+@bot.command(name='conceito', help='Explica um tipo de investimento (ex: !conceito Ações).')
+async def concept(ctx, *, investment_type: str):
+    investment_type = investment_type.lower().strip()
+    concepts = {
+        "tesouro direto": """**Tesouro Direto**: São títulos públicos federais federais emitidos pelo Tesouro Nacional para financiar as atividades do governo. É considerado um dos investimentos mais seguros do Brasil. Existem diferentes tipos:
+        - **Tesouro Selic**: Rendimento atrelado à taxa Selic, ideal para reserva de emergência.
+        - **Tesouro Prefixado**: Rentabilidade definida no momento da compra.
+        - **Tesouro IPCA+**: Rentabilidade atrelada à inflação (IPCA) mais uma taxa fixa.
+        """,
+        "cdb": """**CDB (Certificado de Depósito Bancário)**: Título de renda fixa emitido por bancos para captar recursos. É como um "empréstimo" que você faz ao banco. Geralmente coberto pelo FGC (Fundo Garantidor de Créditos) até R$ 250 mil por CPF/CNPJ por instituição financeira. Pode ter rendimento prefixado, pós-fixado (atrelado ao CDI) ou híbrido.
+        """,
+        "lci": """**LCI (Letra de Crédito Imobiliário)**: Título de renda fixa emitido por bancos para financiar o setor imobiliário. Uma grande vantagem é que o rendimento da LCI é **isento de Imposto de Renda** para pessoa física. Também é coberta pelo FGC.
+        """,
+        "lca": """**LCA (Letra de Crédito do Agronegócio)**: Similar à LCI, mas os recursos são destinados a financiar o setor do agronegócio. Assim como a LCI, o rendimento da LCA é **isento de Imposto de Renda** para pessoa física e é coberta pelo FGC.
+        """,
+        "ações": """**Ações**: Representam a menor parte do capital social de uma empresa. Ao comprar uma ação, você se torna sócio da empresa e pode ganhar com a valorização do preço da ação ou com o recebimento de dividendos (parte do lucro da empresa). Envolve maior risco e volatilidade.
+        """,
+        "fundos de investimento": """**Fundos de Investimento**: São veículos financeiros coletivos onde diversos investidores aplicam seu dinheiro, que é gerido por um profissional (gestor do fundo). Existem vários tipos:
+        - **Fundos de Renda Fixa**: Investem predominantemente em títulos de renda fixa.
+        - **Fundos Multimercado**: Podem investir em diversas classes de ativos (renda fixa, ações, câmbio, etc.), com mais flexibilidade.
+        - **Fundos de Ações**: Investem a maior parte de seus recursos em ações.
+        - **Fundos Imobiliários (FIIs)**: Investem em empreendimentos imobiliários (shoppings, escritórios, galpões logísticos), pagando rendimentos periódicos aos cotistas (geralmente isentos de IR).
+        """,
+        "criptomoedas": """**Criptomoedas**: São moedas digitais descentralizadas que utilizam criptografia para garantir a segurança das transações e controlar a criação de novas unidades. As mais conhecidas são Bitcoin e Ethereum. São extremamente voláteis e não possuem regulamentação completa em muitos países, o que as torna um investimento de altíssimo risco.
+        """
+    }
+
+    if investment_type in concepts:
+        await ctx.send(concepts[investment_type])
+    else:
+        await ctx.send(f"Desculpe, não encontrei informações sobre '{investment_type}'. Tente um dos seguintes: Tesouro Direto, CDB, LCI, LCA, Ações, Fundos de Investimento ou Criptomoedas.")
+
+@bot.command(name='grafico_acao', help='Gera um gráfico histórico de preço para um símbolo de ação (ex: !grafico_acao IBM).')
+async def stock_chart(ctx, symbol: str):
+    await ctx.send(f"Buscando dados históricos para **{symbol.upper()}**... Isso pode levar um momento.")
+    stock_data = await get_stock_data(symbol.upper())
+
+    if stock_data is not None and not stock_data.empty:
+        chart_file = await generate_line_chart(stock_data, title=f"Preço de Fechamento de {symbol.upper()}")
+        if chart_file:
+            await ctx.send(file=chart_file)
+        else:
+            await ctx.send(f"Não foi possível gerar o gráfico para {symbol.upper()}.")
+    else:
+        await ctx.send(f"Não foi possível obter dados para o símbolo **{symbol.upper()}**. Verifique se o símbolo está correto (ex: `IBM` para ações americanas, ou pode ser necessário adicionar `.SA` para brasileiras, como `PETR4.SA` se sua chave da Alpha Vantage suportar) ou se há um problema com a API.")
+        await ctx.send("Lembre-se que a API gratuita da Alpha Vantage tem limites de requisição (5 requisições por minuto, 500 por dia) e pode focar mais em mercados globais (EUA).")
+
 @bot.command(name='analisar', help='Inicia uma análise de mercado e sugestões de investimento.')
 async def analyze_investment(ctx):
     user_id = ctx.author.id
@@ -208,260 +256,93 @@ async def analyze_investment(ctx):
 
     await ctx.send("Olá! Sou o MoneyupInvestiments. Vamos iniciar sua análise de investimento para este mês.")
 
-    # 🚀 Novo passo: perguntar o perfil de investidor
-    await ctx.send("Qual é o seu perfil de investidor? (Conservador, Moderado ou Agressivo)")
+    await ctx.send("Primeiro, qual o **valor total que você pretende investir este mês** (apenas o número, ex: `1000`)?")
     try:
-        profile_msg = await bot.wait_for(
-            'message',
-            check=lambda m: m.author == ctx.author and m.channel == ctx.channel and m.content.lower() in ['conservador', 'moderado', 'agressivo'],
-            timeout=60.0
-        )
-        profile = profile_msg.content.lower()
-        user_session_data[user_id]['profile'] = profile
-        await ctx.send(f"Perfil '{profile.title()}' definido. A análise será ajustada com base nisso.")
-    except asyncio.TimeoutError:
-        await ctx.send("Tempo esgotado. Considerarei o perfil 'Moderado' como padrão.")
-        user_session_data[user_id]['profile'] = 'moderado'
-
-    await ctx.send("Qual o **valor total que você pretende investir este mês**? (Somente o número, ex: `1000`)")
-    try:
-        investment_value_msg = await bot.wait_for(
-            'message',
-            check=lambda m: m.author == ctx.author and m.channel == ctx.channel and is_float(m.content),
-            timeout=60.0
-        )
+        investment_value_msg = await bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel and is_float(m.content), timeout=60.0)
         user_session_data[user_id]['investment_value'] = float(investment_value_msg.content)
         await ctx.send(f"Ok, você pretende investir R$ {user_session_data[user_id]['investment_value']:,.2f}.")
     except asyncio.TimeoutError:
         await ctx.send("Tempo esgotado. Por favor, tente `!analisar` novamente.")
-        del user_session_data[user_id]
+        if user_id in user_session_data: del user_session_data[user_id]
+        return
+    except ValueError:
+        await ctx.send("Valor inválido. Por favor, insira um número válido. Tente `!analisar` novamente.")
+        if user_id in user_session_data: del user_session_data[user_id]
         return
 
-    # Busca Selic
     current_selic = await get_selic_rate()
     if not current_selic:
-        await ctx.send("Não consegui buscar a **taxa Selic**. Por favor, informe (ex: `10.75`):")
+        await ctx.send("Não consegui buscar a **taxa Selic** atual automaticamente. Poderia me informar qual a taxa Selic desse mês (ex: `10.75`)?")
         try:
-            selic_msg = await bot.wait_for(
-                'message',
-                check=lambda m: m.author == ctx.author and m.channel == ctx.channel and is_float(m.content),
-                timeout=60.0
-            )
+            selic_msg = await bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel and is_float(m.content), timeout=60.0)
             user_session_data[user_id]['selic'] = float(selic_msg.content)
-        except:
+            await ctx.send(f"Entendido! Usarei a Selic de **{user_session_data[user_id]['selic']}%**.")
+        except asyncio.TimeoutError:
+            await ctx.send("Tempo esgotado para informar a Selic. A análise será menos precisa sem essa informação.")
+            user_session_data[user_id]['selic'] = None
+        except ValueError:
+            await ctx.send("Valor inválido para a Selic. Análise sem essa informação.")
             user_session_data[user_id]['selic'] = None
     else:
         user_session_data[user_id]['selic'] = current_selic
-        await ctx.send(f"A taxa Selic atual (via API) é: **{current_selic}%**.")
+        await ctx.send(f"A taxa Selic atual (via API) é: **{user_session_data[user_id]['selic']}%**.")
 
-    # Busca IPCA
     current_ipca = await get_ipca_rate()
     if not current_ipca:
-        await ctx.send("Não consegui buscar o **IPCA**. Por favor, informe (ex: `0.5`):")
+        await ctx.send("Não consegui buscar a **taxa IPCA (inflação)** atual automaticamente. Poderia me informar qual a taxa IPCA desse mês (ex: `0.5`)?")
         try:
-            ipca_msg = await bot.wait_for(
-                'message',
-                check=lambda m: m.author == ctx.author and m.channel == ctx.channel and is_float(m.content),
-                timeout=60.0
-            )
+            ipca_msg = await bot.wait_for('message', check=lambda m: m.author == ctx.author and m.channel == ctx.channel and is_float(m.content), timeout=60.0)
             user_session_data[user_id]['ipca'] = float(ipca_msg.content)
-        except:
+            await ctx.send(f"Ok! Usarei o IPCA de **{user_session_data[user_id]['ipca']}%**.")
+        except asyncio.TimeoutError:
+            await ctx.send("Tempo esgotado para informar o IPCA. Análise sem essa informação.")
+            user_session_data[user_id]['ipca'] = None
+        except ValueError:
+            await ctx.send("Valor inválido para o IPCA. Análise sem essa informação.")
             user_session_data[user_id]['ipca'] = None
     else:
         user_session_data[user_id]['ipca'] = current_ipca
-        await ctx.send(f"A taxa IPCA atual (via API) é: **{current_ipca}%**.")
+        await ctx.send(f"A taxa IPCA atual (via API) é: **{user_session_data[user_id]['ipca']}%**.")
 
-    # Pergunta percepção do mercado
-    await ctx.send("Como você vê o **mercado de ações este mês**? (Ex: 'Mercado otimista', 'Mercado estável', 'Mercado em baixa')")
-    try:
-        market_msg = await bot.wait_for(
-            'message',
-            check=lambda m: m.author == ctx.author and m.channel == ctx.channel,
-            timeout=60.0
-        )
-        user_session_data[user_id]['market_perception'] = market_msg.content
-    except:
-        user_session_data[user_id]['market_perception'] = "Não informado."
+    # --- NOVA LÓGICA: Gerar percepção de mercado automaticamente ---
+    current_month = datetime.now().month
+    market_perception_generated = ""
+    if current_month == 1: # Janeiro
+        market_perception_generated = "Mercado de ações global iniciando o ano com cautela, mas com expectativas de recuperação no segundo semestre."
+    elif current_month == 2: # Fevereiro
+        market_perception_generated = "Fevereiro pode trazer volatilidade com balanços de empresas e discussões sobre inflação."
+    elif current_month == 3: # Março
+        market_perception_generated = "Março, geralmente um mês de transição, com investidores avaliando dados econômicos do trimestre."
+    elif current_month == 4: # Abril
+        market_perception_generated = "Abril pode ser favorável, historicamente um bom mês para ações, mas com atenção a indicadores de inflação."
+    elif current_month == 5: # Maio
+        market_perception_generated = "Maio, tradicionalmente mais calmo ("'sell in May and go away'"), mas oportunidades podem surgir em setores específicos."
+    elif current_month == 6: # Junho
+        market_perception_generated = "Junho, marcado por decisões de juros de bancos centrais e fim do segundo trimestre, pode ter maior volatilidade."
+    elif current_month == 7: # Julho
+        market_perception_generated = "Julho, início do segundo semestre, com mercado buscando direções em meio a novas políticas econômicas."
+    elif current_month == 8: # Agosto
+        market_perception_generated = "Agosto, atenção a dados de emprego e inflação, com possível desaceleração em alguns setores."
+    elif current_month == 9: # Setembro
+        market_perception_generated = "Setembro é historicamente um mês de maior correção, com cautela predominante no mercado."
+    elif current_month == 10: # Outubro
+        market_perception_generated = "Outubro, com expectativas de recuperação para o final do ano, mas ainda com incertezas globais."
+    elif current_month == 11: # Novembro
+        market_perception_generated = "Novembro, focado em resultados de Black Friday e projeções para o consumo de fim de ano, com um viés mais otimista."
+    elif current_month == 12: # Dezembro
+        market_perception_generated = "Dezembro, o ''rally'' de fim de ano pode trazer ganhos, mas a liquidez reduzida exige cautela."
+    else:
+        market_perception_generated = "Análise de mercado geral: o cenário atual exige atenção a dados de inflação e movimentos de bancos centrais."
 
-    # 📊 Perfis descritivos
-    profile_description = {
-        'conservador': 'baixa tolerância a risco, foco em segurança e liquidez, prioriza renda fixa e proteção do capital.',
-        'moderado': 'equilíbrio entre segurança e rentabilidade, aceita riscos controlados e preza por diversificação.',
-        'agressivo': 'alta tolerância a risco, busca rentabilidade elevada com exposição a renda variável e ativos voláteis.'
-    }
+    user_session_data[user_id]['market_perception'] = market_perception_generated
+    await ctx.send(f"Minha análise do mercado para este mês ({datetime.now().strftime('%B')}): '{user_session_data[user_id]['market_perception']}'.")
+    # --- FIM DA NOVA LÓGICA ---
 
     investment_value = user_session_data[user_id]['investment_value']
-    selic_info = f"{user_session_data[user_id]['selic']}%" if user_session_data[user_id]['selic'] else "Não informada"
-    ipca_info = f"{user_session_data[user_id]['ipca']}%" if user_session_data[user_id]['ipca'] else "Não informada"
-    perception = user_session_data[user_id]['market_perception']
-    profile_key = user_session_data[user_id]['profile']
+    selic_info = f"Taxa Selic: {user_session_data[user_id]['selic']}%" if user_session_data[user_id]['selic'] else "Taxa Selic não informada. Assuma um valor médio para um perfil moderado (ex: entre 10-12% ao ano)."
+    ipca_info = f"Taxa IPCA: {user_session_data[user_id]['ipca']}%" if user_session_data[user_id]['ipca'] else "Taxa IPCA não informada. Assuma um valor médio da inflação recente."
+    market_perception_info = f"Percepção do mercado de ações (gerada automaticamente): {user_session_data[user_id]['market_perception']}" # Ajustado aqui
 
-    # 🧠 Prompt para Gemini (adaptado)
     prompt = f"""
-Você é um consultor financeiro chamado MoneyupInvestiments, especializado em perfis de risco. Um usuário respondeu às perguntas e você deve gerar uma análise personalizada.
-
-📌 **Informações:**
-- Perfil de investidor: {profile_key.title()} — {profile_description[profile_key]}
-- Valor a investir: R$ {investment_value:,.2f}
-- Taxa Selic: {selic_info}
-- IPCA: {ipca_info}
-- Percepção do mercado: {perception}
-
-📈 Gere:
-1. Um resumo do cenário atual.
-2. Uma sugestão de alocação de carteira, com percentuais e ativos por tipo (ex: Tesouro, CDB, ações, FIIs, cripto).
-3. Justificativas para cada alocação com base no perfil.
-"""
-
-    await ctx.send("Processando sua análise... Isso pode levar alguns segundos.")
-
-    try:
-        response = await asyncio.to_thread(model.generate_content, prompt)
-        analysis_text = response.text
-        await send_long_message(ctx, analysis_text)
-    except Exception as e:
-        await ctx.send(f"Erro ao gerar a análise: {e}")
-
-@bot.command(name='ajuda',
-             help='Mostra os comandos disponíveis do MoneyupInvestiments.')
-async def help_command(ctx):
-    embed = discord.Embed(
-        title="Bem-vindo ao MoneyupInvestiments! 💰",
-        description=
-        "Sou seu instrutor pessoal para te ajudar a entender e navegar no mundo dos investimentos. Aqui estão os comandos que você pode usar:",
-        color=discord.Color.gold())
-    embed.add_field(
-        name="`!analisar`",
-        value=
-        "Peça uma análise de mercado e sugestões de investimento específicas.",
-        inline=False)
-    embed.add_field(
-        name="`!conceito [termo]`",
-        value=
-        "Obtenha uma explicação detalhada sobre Tesouro Direto, CDB, LCI, LCA, Ações, Fundos de Investimento ou Criptomoedas.",
-        inline=False)
-    embed.add_field(
-        name="`!grafico_acao [simbolo]`",
-        value=
-        "Gera um gráfico histórico de preço para um símbolo de ação (ex: `!grafico_acao IBM`).",
-        inline=False)
-    embed.add_field(
-        name="`!limpar_dados`",
-        value=
-        "Limpa os dados da sua sessão atual (útil se quiser recomeçar uma análise).",
-        inline=False)
-    embed.add_field(name="`!ajuda`",
-                    value="Mostra esta mensagem de ajuda.",
-                    inline=False)
-    embed.add_field(
-        name="Interações Naturais (sem `!`):",
-        value=
-        "Você também pode tentar dizer:\n- `Olá` ou `Oi`\n- `Qual o investimento de hoje`\n- `analisar`\n- `ajuda`\n- `O que temos para investir`\nPara uma conversa inicial e dicas.",
-        inline=False)
-    embed.set_footer(
-        text=
-        "Lembre-se: As sugestões são baseadas nas informações disponíveis e em modelos de IA. As decisões finais são suas!"
-    )
-    await ctx.send(embed=embed)
-
-
-@bot.command(name='limpar_dados', help='Limpa os dados da sua sessão atual.')
-async def clear_data(ctx):
-    user_id = ctx.author.id
-    if user_id in user_session_data:
-        del user_session_data[user_id]
-        await ctx.send(
-            "Seus dados de sessão foram limpos. Você pode iniciar uma nova análise com `!analisar`."
-        )
-    else:
-        await ctx.send("Não há dados de sessão para limpar.")
-
-
-@bot.command(name='conceito',
-             help='Explica um tipo de investimento (ex: !conceito Ações).')
-async def concept(ctx, *, investment_type: str):
-    investment_type = investment_type.lower().strip()
-    concepts = {
-        "tesouro direto":
-        """**Tesouro Direto**: São títulos públicos federais federais emitidos pelo Tesouro Nacional para financiar as atividades do governo. É considerado um dos investimentos mais seguros do Brasil. Existem diferentes tipos:
-        - **Tesouro Selic**: Rendimento atrelado à taxa Selic, ideal para reserva de emergência.
-        - **Tesouro Prefixado**: Rentabilidade definida no momento da compra.
-        - **Tesouro IPCA+**: Rentabilidade atrelada à inflação (IPCA) mais uma taxa fixa.
-        """,
-        "cdb":
-        """**CDB (Certificado de Depósito Bancário)**: Título de renda fixa emitido por bancos para captar recursos. É como um "empréstimo" que você faz ao banco. Geralmente coberto pelo FGC (Fundo Garantidor de Créditos) até R$ 250 mil por CPF/CNPJ por instituição financeira. Pode ter rendimento prefixado, pós-fixado (atrelado ao CDI) ou híbrido.
-        """,
-        "lci":
-        """**LCI (Letra de Crédito Imobiliário)**: Título de renda fixa emitido por bancos para financiar o setor imobiliário. Uma grande vantagem é que o rendimento da LCI é **isento de Imposto de Renda** para pessoa física. Também é coberta pelo FGC.
-        """,
-        "lca":
-        """**LCA (Letra de Crédito do Agronegócio)**: Similar à LCI, mas os recursos são destinados a financiar o setor do agronegócio. Assim como a LCI, o rendimento da LCA é **isento de Imposto de Renda** para pessoa física e é coberta pelo FGC.
-        """,
-        "ações":
-        """**Ações**: Representam a menor parte do capital social de uma empresa. Ao comprar uma ação, você se torna sócio da empresa e pode ganhar com a valorização do preço da ação ou com o recebimento de dividendos (parte do lucro da empresa). Envolve maior risco e volatilidade.
-        """,
-        "fundos de investimento":
-        """**Fundos de Investimento**: São veículos financeiros coletivos onde diversos investidores aplicam seu dinheiro, que é gerido por um profissional (gestor do fundo). Existem vários tipos:
-        - **Fundos de Renda Fixa**: Investem predominantemente em títulos de renda fixa.
-        - **Fundos Multimercado**: Podem investir em diversas classes de ativos (renda fixa, ações, câmbio, etc.), com mais flexibilidade.
-        - **Fundos de Ações**: Investem a maior parte de seus recursos em ações.
-        - **Fundos Imobiliários (FIIs)**: Investem em empreendimentos imobiliários (shoppings, escritórios, galpões logísticos), pagando rendimentos periódicos aos cotistas (geralmente isentos de IR).
-        """,
-        "criptomoedas":
-        """**Criptomoedas**: São moedas digitais descentralizadas que utilizam criptografia para garantir a segurança das transações e controlar a criação de novas unidades. As mais conhecidas são Bitcoin e Ethereum. São extremamente voláteis e não possuem regulamentação completa em muitos países, o que as torna um investimento de altíssimo risco.
-        """
-    }
-
-    if investment_type in concepts:
-        await ctx.send(concepts[investment_type])
-    else:
-        await ctx.send(
-            f"Desculpe, não encontrei informações sobre '{investment_type}'. Tente um dos seguintes: Tesouro Direto, CDB, LCI, LCA, Ações, Fundos de Investimento ou Criptomoedas."
-        )
-
-
-@bot.command(
-    name='grafico_acao',
-    help=
-    'Gera um gráfico histórico de preço para um símbolo de ação (ex: !grafico_acao IBM).'
-)
-async def stock_chart(ctx, symbol: str):
-    await ctx.send(
-        f"Buscando dados históricos para **{symbol.upper()}**... Isso pode levar um momento."
-    )
-    stock_data = await get_stock_data(symbol.upper())
-
-    if stock_data is not None and not stock_data.empty:
-        chart_file = await generate_line_chart(
-            stock_data, title=f"Preço de Fechamento de {symbol.upper()}")
-        if chart_file:
-            await ctx.send(file=chart_file)
-        else:
-            await ctx.send(
-                f"Não foi possível gerar o gráfico para {symbol.upper()}.")
-    else:
-        await ctx.send(
-            f"Não foi possível obter dados para o símbolo **{symbol.upper()}**. Verifique se o símbolo está correto (ex: `IBM` para ações americanas, ou pode ser necessário adicionar `.SA` para brasileiras, como `PETR4.SA` se sua chave da Alpha Vantage suportar) ou se há um problema com a API."
-        )
-        await ctx.send(
-            "Lembre-se que a API gratuita da Alpha Vantage tem limites de requisição (5 requisições por minuto, 500 por dia) e pode focar mais em mercados globais (EUA)."
-        )
-
-
-# --- Executar o Bot ---
-if __name__ == "__main__":
-    if not DISCORD_BOT_TOKEN:
-        print(
-            "Erro: DISCORD_BOT_TOKEN não encontrado. Certifique-se de adicioná-lo nas Secrets do Replit."
-        )
-    elif not GEMINI_API_KEY:
-        print(
-            "Erro: GEMINI_API_KEY não encontrado. Certifique-se de adicioná-lo nas Secrets do Replit."
-        )
-    elif not ALPHA_VANTAGE_API_KEY:
-        print(
-            "Erro: ALPHA_VANTAGE_API_KEY não encontrado. Certifique-se de adicioná-lo nas Secrets do Replit."
-        )
-    else:
-        bot.run(DISCORD_BOT_TOKEN)
-        
+    Você é o MoneyupInvestiments, um instrutor e consultor de investimentos para um perfil **moderado**.
+    Seu objetivo é analisar o mercado e sugerir uma alocação de carteira detalhada, incluindo **nomes de ativos (exemplos realistas e, se possível, fictícios baseados em tickers comuns como PETR4, ITUB4, HGLG11, MXRF11, BBDC4 ou símbolos globais como G
